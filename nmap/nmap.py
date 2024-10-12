@@ -747,7 +747,7 @@ def __scan_progressive__(  # NOQA: CFQ002
             scan_data = None
 
         if callback is not None:
-            callback(host, scan_data)
+            callback(self, host, scan_data)
     return
 
 

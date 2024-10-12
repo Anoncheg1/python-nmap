@@ -28,7 +28,7 @@ Contributors:
 * Johan Lundberg
 * Thomas D. maaaaz
 * Robert Bost
- 
+
 Licence : GPL v3 or any later version
 
 
@@ -282,7 +282,7 @@ def test_ipv4_async():
     FLAG = Value("i", 0)
     nma = nmap.PortScannerAsync()
 
-    def callback_result(host, scan_result):
+    def callback_result(self, host, scan_result):
         global FLAG
         FLAG.value = 1
 
@@ -299,7 +299,7 @@ def test_ipv6_async():
     FLAG_ipv6 = Value("i", 0)
     nma_ipv6 = nmap.PortScannerAsync()
 
-    def callback_result(host, scan_result):
+    def callback_result(self, host, scan_result):
         global FLAG_ipv6
         FLAG_ipv6.value = 1
 
@@ -412,7 +412,7 @@ def test_WARNING_case_sensitive():
 def test_scan_progressive():
     nmp = nmap.PortScannerAsync()
 
-    def callback(host, scan_data):
+    def callback(self, host, scan_data):
         assert host is not None
 
     nmp.scan(hosts="127.0.0.1", arguments="-sV", callback=callback)
@@ -421,8 +421,8 @@ def test_scan_progressive():
 
 def test_sudo_encoding__T24():
     """
-    When using "sudo=True" like this 'nm.scan(hosts=ip_range, arguments="-sP", sudo = True)' 
-    i got a UnicodeDecodeError: 'ascii' codec can't decode byte 0xc3 in position 9: ordinal not in range(128). 
-    But if sudo is false all thing work nice. 
+    When using "sudo=True" like this 'nm.scan(hosts=ip_range, arguments="-sP", sudo = True)'
+    i got a UnicodeDecodeError: 'ascii' codec can't decode byte 0xc3 in position 9: ordinal not in range(128).
+    But if sudo is false all thing work nice.
     """
     r = nm.scan("192.168.1.1/24", arguments="-sP", sudo=True)
