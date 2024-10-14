@@ -89,7 +89,7 @@ nm.scaninfo()                       # get nmap scan informations {'tcp': {'servi
 nm.all_hosts()                      # get all hosts that were scanned
 nm['127.0.0.1'].hostname()          # get one hostname for host 127.0.0.1, usualy the user record
 nm['127.0.0.1'].hostnames()         # get list of hostnames for host 127.0.0.1 as a list of dict [{'name':'hostname1', 'type':'PTR'}, {'name':'hostname2', 'type':'user'}]
-nm['127.0.0.1'].state()             # get state of host 127.0.0.1 (up|down|unknown|skipped) 
+nm['127.0.0.1'].state()             # get state of host 127.0.0.1 (up|down|unknown|skipped)
 nm['127.0.0.1'].all_protocols()     # get all scanned protocols ['tcp', 'udp'] in (ip|tcp|udp|sctp)
 if ('tcp' in nm['127.0.0.1']):
     list(nm['127.0.0.1']['tcp'].keys()) # get all ports for tcp protocol
@@ -196,6 +196,23 @@ with open("./nmap_output.xml", "r") as fd:
     content = fd.read()
     nm.analyse_nmap_xml_scan(content)
     print(nm.csv())
+
+
+
+print('----------------------------------------------------')
+# scan with pool of processes
+ret = []
+
+def callback(args):
+    host, scan_data = args
+    if scan_data['scan'] and \
+       scan_data['scan']['status']['state'] == "up":
+        ret.append(host)
+
+nmp = nmap.PortScannerPool(processes=5)
+nm.scan('127.0.0.1/24', '22-25', callback=callback)
+nmp.wait()
+print(ret)
 
 
 
