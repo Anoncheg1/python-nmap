@@ -1012,7 +1012,6 @@ class PortScannerPool(object):
         ports=None,
         arguments="-sV",
         callback=None,
-        callback_argument=None,
         sudo=False,
         timeout=0,
     ):
@@ -1026,7 +1025,7 @@ class PortScannerPool(object):
         :param arguments: string of arguments for nmap '-sU -sX -sC'
         :param callback: callback function which takes (host, scan_data), executed in main single process
         :param sudo: launch nmap with sudo if true
-        :param timeout: int, if > zero, will terminate scan after seconds, otherwise will wait indefintely
+        :param timeout: int, if > zero, will terminate scan per host after seconds, otherwise will wait indefintely
         """
 
         if sys.version_info[0] == 2:
@@ -1097,9 +1096,16 @@ class PortScannerPool(object):
         """
         return [p.get(timeout) for p in self._batch]
 
-    def wait(self):
+    def wait(self, timeout=None):
         """
-        Wait for the worker processes to exit and terminate process.
+        Wait for all tasks to finish.
+        """
+        return [p.wait(timeout) for p in self._batch]
+
+    def close(self):
+        """
+        Wait stop execution of new tasks on processes and wait to finish
+        current. Processes terminated.
         """
         self._pool.close()
         self._pool.join()
