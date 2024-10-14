@@ -58,7 +58,7 @@ import subprocess
 import sys
 from multiprocessing import Process
 from xml.etree import ElementTree as ET
-
+import random
 
 __author__ = "Alexandre Norman (norman@xael.org)"
 __version__ = "0.7.1"
@@ -740,7 +740,9 @@ def __scan_progressive__(  # NOQA: CFQ002
     """
     Used by PortScannerAsync for callback
     """
-    for host in self._nm.listscan(hosts):
+    hosts_list = self._nm.listscan(hosts)
+    random.shuffle(hosts_list)
+    for host in hosts_list:
         try:
             scan_data = self._nm.scan(host, ports, arguments, sudo, timeout)
         except PortScannerError:
@@ -959,6 +961,161 @@ class PortScannerYield(PortScannerAsync):
     def still_scanning(self):
         pass
 
+############################################################################
+
+
+from multiprocessing.pool import Pool
+
+
+def __scan_wrap__(f, host, ports, arguments, sudo, timeout):
+    try:
+        scan_data = f(host, ports, arguments, sudo, timeout)
+    except PortScannerError:
+        scan_data = None
+
+    return host, scan_data
+
+
+class PortScannerPool(object):
+    """
+    PortScannerPool allows to  specify count of processes to be  run for each
+    host scanned, callback is called with scan result for the host.  You can not
+    pass queue  to process  or any  type of  lock or  your own  function without
+    special  "if __main__"  construction so  you  should create  new threads  in
+    callback. use get() to find error.
+    """
+
+    def __init__(self, processes=3):
+        """
+        Initialize the module
+
+        * detects nmap on the system and nmap version
+        * may raise PortScannerError exception if nmap is not found in the path
+
+        """
+        self.processes = processes
+        self._pool = Pool(processes)
+        self._nm = PortScanner()
+        return
+
+    def __del__(self):
+        """
+        Forcely shut processes in pool without waiting to finish current tasks.
+        """
+        self._pool.terminate()
+        self._pool.join()
+        self._batch = None # batch of currenty pushed tasks.
+
+    def scan(  # NOQA: CFQ002
+        self,
+        hosts="127.0.0.1",
+        ports=None,
+        arguments="-sV",
+        callback=None,
+        callback_argument=None,
+        sudo=False,
+        timeout=0,
+    ):
+        """
+        Scan given hosts in a separate process and return host by host result using callback function
+
+        PortScannerError exception from standard nmap is catched and you won't know about but get None as scan_data
+
+        :param hosts: string for hosts as nmap use it 'scanme.nmap.org' or '198.116.0-255.1-127' or '216.163.128.20/20'
+        :param ports: string for ports as nmap use it '22,53,110,143-4564'
+        :param arguments: string of arguments for nmap '-sU -sX -sC'
+        :param callback: callback function which takes (host, scan_data), executed in main single process
+        :param sudo: launch nmap with sudo if true
+        :param timeout: int, if > zero, will terminate scan after seconds, otherwise will wait indefintely
+        """
+
+        if sys.version_info[0] == 2:
+            assert type(hosts) in (
+                str,
+            ), f"Wrong type for [hosts], should be a string [was {type(hosts)}]"
+            assert type(ports) in (
+                str,
+                type(None),
+            ), f"Wrong type for [ports], should be a string [was {type(ports)}]"
+            assert type(arguments) in (
+                str,
+            ), f"Wrong type for [arguments], should be a string [was {type(arguments)}]"
+        else:
+            assert (
+                type(hosts) is str
+            ), f"Wrong type for [hosts], should be a string [was {type(hosts)}]"
+            assert type(ports) in (
+                str,
+                type(None),
+            ), f"Wrong type for [ports], should be a string [was {type(ports)}]"
+            assert (
+                type(arguments) is str
+            ), f"Wrong type for [arguments], should be a string [was {type(arguments)}]"
+
+        assert (
+            callable(callback) or callback is None
+        ), f"The [callback] {str(callback)} should be callable or None."
+
+        for redirecting_output in ["-oX", "-oA"]:
+            assert (
+                redirecting_output not in arguments
+            ), "Xml output can't be redirected from command line.\nYou can access it after a scan using:\nnmap.nm.get_nmap_last_output()"  # NOQA: E501
+        self._batch = []
+        hlist = self._nm.listscan(hosts)
+        random.shuffle(hlist)
+
+        for host in hlist:
+            print(f"host {host}")
+            try:
+                self._batch.append(
+                    self._pool.apply_async(func=__scan_wrap__,
+                                           args=(self._nm.scan, host, ports, arguments, sudo, timeout),
+                                           callback=callback))
+            except ValueError:
+                # reinitialize pool
+                self._pool.close()
+                self._pool = Pool(self.processes)
+                self._batch.append(
+                    self._pool.apply_async(func=__scan_wrap__,
+                                           args=(self._nm.scan, host, ports, arguments, sudo, timeout),
+                                           callback=callback))
+        return self._batch
+
+    def terminate(self):
+        """
+        Stops the worker processes immediately without completing outstanding work.
+        """
+        self._pool.terminate()
+
+    def get(self, timeout=None):
+        """
+        Wait for for all tasks to be finished and return result.
+
+        :returns: result result before call of callback . If timeout is not
+        None and the result does not arrive within timeout seconds then
+        multiprocessing.TimeoutError is raised.
+        """
+        return [p.get(timeout) for p in self._batch]
+
+    def wait(self):
+        """
+        Wait for the worker processes to exit and terminate process.
+        """
+        self._pool.close()
+        self._pool.join()
+
+    def get_in_queue_count(self):
+        """
+        :returns: Count of task waiting to be executed.
+        """
+        return self._pool._taskqueue.qsize()
+
+    def still_scanning(self):
+        """
+        :returns: True if a scan is currently running, False otherwise
+
+        """
+        return not all([p.ready() for p in self._batch])
 
 ############################################################################
 
