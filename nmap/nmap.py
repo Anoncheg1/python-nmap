@@ -20,6 +20,7 @@ Contributors:
 * Robert Bost
 * David Peltier
 * Ed Jones
+* Anoncheg1 - github.com
 
 Licence: GPL v3 or any later version for python-nmap
 
@@ -1016,14 +1017,15 @@ class PortScannerPool(object):
         timeout=0,
     ):
         """
-        Scan given hosts in a separate process and return host by host result using callback function
+        Scan given hosts in a separate process and return host by host result using callback function.
+        Every new scan call append task to pool and reuse processes.
 
         PortScannerError exception from standard nmap is catched and you won't know about but get None as scan_data
 
         :param hosts: string for hosts as nmap use it 'scanme.nmap.org' or '198.116.0-255.1-127' or '216.163.128.20/20'
         :param ports: string for ports as nmap use it '22,53,110,143-4564'
         :param arguments: string of arguments for nmap '-sU -sX -sC'
-        :param callback: callback function which takes (host, scan_data), executed in main single process
+        :param callback: callback function which takes (host, scan_data) as a tuple, executed in main single process
         :param sudo: launch nmap with sudo if true
         :param timeout: int, if > zero, will terminate scan per host after seconds, otherwise will wait indefintely
         """
@@ -1064,7 +1066,7 @@ class PortScannerPool(object):
         random.shuffle(hlist)
 
         for host in hlist:
-            print(f"host {host}")
+            # print(f"host {host}")
             try:
                 self._batch.append(
                     self._pool.apply_async(func=__scan_wrap__,
