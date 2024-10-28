@@ -997,7 +997,7 @@ class PortScannerPool(object):
         self.processes = processes
         self._pool = Pool(processes)
         self._nm = PortScanner()
-        return
+        self._batch = []
 
     def __del__(self):
         """
@@ -1017,12 +1017,14 @@ class PortScannerPool(object):
         timeout=0,
     ):
         """
-        Scan given hosts in a separate process and return host by host result using callback function.
+        Scan given hosts in a separate process and return per network result using callback function.
         Every new scan call append task to pool and reuse processes.
+        Pool.apply_async() Have wierd behavior, you should call several apply_async in sequence because
+        after several miliseconds .wait() will be called. That is why hosts accept sequence separated by space.
 
         PortScannerError exception from standard nmap is catched and you won't know about but get None as scan_data
 
-        :param hosts: string for hosts as nmap use it 'scanme.nmap.org' or '198.116.0-255.1-127' or '216.163.128.20/20'
+        :param hosts: string for several hosts as nmap separated by space use it like '198.116.0-255.1-127 216.163.128.20/20' 'scanme.nmap.org 216.163.128.20'
         :param ports: string for ports as nmap use it '22,53,110,143-4564'
         :param arguments: string of arguments for nmap '-sU -sX -sC'
         :param callback: callback function which takes (host, scan_data) as a tuple, executed in main single process
@@ -1061,19 +1063,21 @@ class PortScannerPool(object):
             assert (
                 redirecting_output not in arguments
             ), "Xml output can't be redirected from command line.\nYou can access it after a scan using:\nnmap.nm.get_nmap_last_output()"  # NOQA: E501
-        self._batch = []
-        hlist = self._nm.listscan(hosts)
+
+
+        hlist = shlex.split(hosts)
+        # hlist = self._nm.listscan(hosts)
         random.shuffle(hlist)
 
         for host in hlist:
-            # print(f"host {host}")
             try:
                 self._batch.append(
                     self._pool.apply_async(func=__scan_wrap__,
                                            args=(self._nm.scan, host, ports, arguments, sudo, timeout),
                                            callback=callback))
+
             except ValueError:
-                # reinitialize pool
+                print("ValueError, Reinitialize pool.")
                 self._pool.close()
                 self._pool = Pool(self.processes)
                 self._batch.append(
